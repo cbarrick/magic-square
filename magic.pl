@@ -14,7 +14,7 @@ square_([H|T], N) :-
 % True when Table is an NxN magic-square.
 magic(Table, N) :-
 	N in 3..sup,
-	Sum #= (N * (N * N + 1)) / 2,
+	Sum #= (N * (N * N + 1)) // 2,
 	Max #= N*N,
 	square(Table, N),
 	transpose(Table, Trans),
