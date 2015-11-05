@@ -38,7 +38,7 @@ func (m magic) String() (s string) {
 		if n == 0 {
 			s += "["
 		}
-		s += strconv.Itoa(m.gene[i])
+		s += strconv.Itoa(m.gene[i] + 1)
 		n = (n + 1) % dim
 		if n == 0 {
 			s += "]"
@@ -52,7 +52,7 @@ func (m *magic) Close() {}
 
 func (m *magic) Fitness() float64 {
 	m.once.Do(func() {
-		sum := dim * (dim * dim + 1) / 2
+		sum := dim * (dim * dim - 1) / 2
 		var part int // partial sum, used to compute sums of rows, cols, diags.
 
 		// rows
@@ -139,7 +139,12 @@ func main() {
 	// Tear-down:
 	defer func() {
 		pop.Close()
-		fmt.Println("\nSolution:", evo.Max(pop))
+		max := evo.Max(pop)
+		if max.Fitness() != dim*2+2 {
+			fmt.Println("\nSolution Not Found")
+		} else {
+			fmt.Println("\nSolution:", evo.Max(pop))
+		}
 	}()
 
 	// Run:
