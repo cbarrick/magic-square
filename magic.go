@@ -31,9 +31,7 @@ var (
 // permutations of (0,dim^2]. This difference may have subtle implications on
 // the theory.
 type magic struct {
-	gene    []int     // the square, interpreted as the concatination of the rows
-	fitness float64   // the number of rows, cols, & diags without conflicts
-	once    sync.Once // used to compute the fitness lazily
+	gene []int // the square, interpreted as the concatination of the rows
 }
 
 // String returns a representation of the square. The output is a valid Prolog
@@ -65,55 +63,54 @@ func (m *magic) Close() {}
 // Fitness returns the number of rows, columns, and diagonal that do not contain
 // conflicts. The fitness is only computed once across all calls to the method
 // by using a sync.Once.
-func (m *magic) Fitness() float64 {
-	m.once.Do(func() {
-		sum := dim * (dim * dim - 1) / 2
-		var part int // partial sum, used to compute sums of rows, cols, diags.
+func (m *magic) Fitness() (fitness float64) {
+	sum := dim * (dim*dim - 1) / 2
+	var part int // partial sum, used to compute sums of rows, cols, diags.
 
-		// rows
-		for i := 0; i < dim; i++ {
-			part = 0
-			for j := 0; j < dim; j++ {
-				part += m.gene[dim*i+j]
-			}
-			if part == sum {
-				m.fitness++
-			}
-		}
-
-		// columns
-		for i := 0; i < dim; i++ {
-			part = 0
-			for j := 0; j < dim; j++ {
-				part += m.gene[dim*j+i]
-			}
-			if part == sum {
-				m.fitness++
-			}
-		}
-
-		// diagonals
+	// rows
+	for i := 0; i < dim; i++ {
 		part = 0
-		for i := 0; i < dim; i++ {
-			part += m.gene[dim*i+i]
+		for j := 0; j < dim; j++ {
+			part += m.gene[dim*i+j]
 		}
 		if part == sum {
-			m.fitness++
+			fitness++
 		}
+	}
+
+	// columns
+	for i := 0; i < dim; i++ {
 		part = 0
-		for i := 0; i < dim; i++ {
-			part += m.gene[dim*(i+1)-i-1]
+		for j := 0; j < dim; j++ {
+			part += m.gene[dim*j+i]
 		}
 		if part == sum {
-			m.fitness++
+			fitness++
 		}
+	}
 
-		// increment the counter of fitness evals
-		count.Lock()
-		count.n++
-		count.Unlock()
-	})
-	return m.fitness
+	// diagonals
+	part = 0
+	for i := 0; i < dim; i++ {
+		part += m.gene[dim*i+i]
+	}
+	if part == sum {
+		fitness++
+	}
+	part = 0
+	for i := 0; i < dim; i++ {
+		part += m.gene[dim*(i+1)-i-1]
+	}
+	if part == sum {
+		fitness++
+	}
+
+	// increment the counter of fitness evals
+	count.Lock()
+	count.n++
+	count.Unlock()
+
+	return fitness
 }
 
 // Evolve specifies the inner loop of our evolutionary algorithm.
@@ -156,7 +153,7 @@ func main() {
 	// We create an initial random population to evolve in a diffusion model.
 	init := make([]evo.Genome, 1024)
 	for i := range init {
-		init[i] = &magic{gene: rand.Perm(dim*dim)}
+		init[i] = &magic{gene: rand.Perm(dim * dim)}
 	}
 	pop := graph.Hypercube(init)
 	pop.Start()
