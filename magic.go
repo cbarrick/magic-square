@@ -9,25 +9,36 @@ import (
 	"github.com/cbarrick/evo"
 	"github.com/cbarrick/evo/perm"
 	"github.com/cbarrick/evo/pop/graph"
+	"github.com/cbarrick/evo/sel"
 )
 
+// Tuneables
 const (
-	dim = 4
+	dim = 4 // dimension of the problem
 )
 
+// Global objects
 var (
+	// Counts the number of fitness evaluations
 	count struct {
 		sync.Mutex
 		n int
 	}
 )
 
+// The magic type specifies our genome. We use a permutation of [0,dim^2) to
+// represent the square. Note that Wikipedia specifies magic squares as
+// permutations of (0,dim^2]. This difference may have subtle implications on
+// the theory.
 type magic struct {
-	gene    []int
-	fitness float64
-	once    sync.Once
+	gene    []int     // the square, interpreted as the concatination of the rows
+	fitness float64   // the number of rows, cols, & diags without conflicts
+	once    sync.Once // used to compute the fitness lazily
 }
 
+// String returns a representation of the square. The output is a valid Prolog
+// term, and the numeric values are incremented by 1 to match the theory on
+// Wikipedia. Thus the output can be verified directly by the Prolog solver.
 func (m magic) String() (s string) {
 	n := 0
 	s += "["
@@ -48,8 +59,12 @@ func (m magic) String() (s string) {
 	return s
 }
 
+// Close does nothing because we use no closable resources.
 func (m *magic) Close() {}
 
+// Fitness returns the number of rows, columns, and diagonal that do not contain
+// conflicts. The fitness is only computed once across all calls to the method
+// by using a sync.Once.
 func (m *magic) Fitness() float64 {
 	m.once.Do(func() {
 		sum := dim * (dim * dim - 1) / 2
@@ -101,24 +116,33 @@ func (m *magic) Fitness() float64 {
 	return m.fitness
 }
 
+// Evolve specifies the inner loop of our evolutionary algorithm.
 func (m *magic) Evolve(suitors ...evo.Genome) evo.Genome {
 	// Creation:
+	// We allocate a new genome for the child on the heap
 	child := &magic{gene: make([]int, dim*dim)}
 
 	// Crossover:
-	mom := suitors[rand.Intn(len(suitors))].(*magic)
-	dad := suitors[rand.Intn(len(suitors))].(*magic)
-	perm.OrderX(child.gene, mom.gene, dad.gene)
+	// We're using a diffusion model. Thus we pick one suitor to cross with the
+	// current genome in this spot. We pick the mate using a single random
+	// binary tournament. We use cycle crossover to inherit positioning.
+	mate := sel.BinaryTournament(suitors...).(*magic)
+	perm.CycleX(child.gene, m.gene, mate.gene)
 
 	// Mutation:
-	switch n := rand.Float64(); {
-	case n < 0.1:
-		perm.RandInvert(child.gene)
-	case n < 0.2:
-		perm.RandSwap(child.gene)
+	// 20% chance of a single random swap, 4% chance of two swaps, 0.8% chance
+	// of three swaps, etc.
+	for {
+		n := rand.Float64()
+		if n < 0.2 {
+			perm.RandSwap(child.gene)
+		} else {
+			break
+		}
 	}
 
 	// Replacement:
+	// Only replace if the child is better or equal.
 	if child.Fitness() < m.Fitness() {
 		return m
 	}
@@ -129,25 +153,30 @@ func main() {
 	fmt.Println("Dimension:", dim)
 
 	// Setup:
+	// We create an initial random population to evolve in a diffusion model.
 	init := make([]evo.Genome, 1024)
 	for i := range init {
 		init[i] = &magic{gene: rand.Perm(dim*dim)}
 	}
-	pop := graph.Grid(init)
+	pop := graph.Hypercube(init)
 	pop.Start()
 
 	// Tear-down:
+	// Cleanup and print a solution if we have one.
 	defer func() {
 		pop.Close()
 		max := evo.Max(pop)
+		fmt.Println()
 		if max.Fitness() != dim*2+2 {
-			fmt.Println("\nSolution Not Found")
+			fmt.Println("Solution Not Found")
+			fmt.Println("Best:", max)
 		} else {
-			fmt.Println("\nSolution:", evo.Max(pop))
+			fmt.Println("Solution:", max)
 		}
 	}()
 
 	// Run:
+	// Collect and print stats and evaluate the termination conditions.
 	for {
 		count.Lock()
 		n := count.n
@@ -155,10 +184,11 @@ func main() {
 		stats := pop.Stats()
 
 		// "\x1b[2K" is the escape code to clear the line
-		fmt.Printf("\x1b[2K\rCount: %7d | Max: %4.0f | Min: %4.0f | SD: %6.6g",
+		fmt.Printf("\x1b[2K\rCount: %7d | Max: %2.0f | Min: %2.0f | Mean: %3.1f | SD: %6.6g",
 			n,
 			stats.Max(),
 			stats.Min(),
+			stats.Mean(),
 			stats.StdDeviation())
 
 		// We've found the solution when max is dim*2+2
