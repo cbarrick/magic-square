@@ -3,114 +3,321 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"strconv"
 )
 
-type square []int
+// square
+// -------------------------
 
-func (sq square) Dim() int {
-	return isqrt(len(sq))
+type square struct {
+	m    [][]int // the square
+	mask [][]bool
+	d    density
+	alg  string // the algorithm used to generate the square
 }
 
-// String returns the square as a Prolog term.
-// 0s are replaced by placeholders.
-func (sq square) String() string {
-	var buffer bytes.Buffer
-	_, _ = buffer.WriteString("[")
-	dim := sq.Dim()
-	for i, x := range sq {
-		if i > 0 {
-			_, _ = buffer.WriteString(", ")
-		}
-		if i%dim == 0 {
-			_, _ = buffer.WriteString("[")
-		}
-		if x != 0 {
-			_, _ = buffer.WriteString(strconv.Itoa(x))
-		} else {
-			_, _ = buffer.WriteString("_")
-		}
-		if i%dim == dim-1 {
-			_, _ = buffer.WriteString("]")
-		}
+type density float64
+
+const (
+	FULL density = 0
+	HIGH density = 0.25
+	MID  density = 0.5
+	LOW  density = 0.75
+)
+
+func (sq *square) Init(n int) {
+	sq.m = make([][]int, n)
+	sq.mask = make([][]bool, n)
+	m := make([]int, n*n)
+	mask := make([]bool, n*n)
+	for i := range sq.m {
+		sq.m[i] = m[n*i : n*(i+1)]
+		sq.mask[i] = mask[n*i : n*(i+1)]
 	}
-	_, _ = buffer.WriteString("]")
-	return buffer.String()
 }
 
-// isqrt returns the integer square root of x
-func isqrt(x int) int {
-	var root int64
-	x64 := int64(x)
-	bit := int64(1) << 62
-	for bit > x64 {
-		bit >>= 2
+func (sq *square) String() string {
+	var d string
+	switch sq.d {
+	case FULL:
+		d = "soln"
+	case HIGH:
+		d = "easy"
+	case MID:
+		d = "med"
+	case LOW:
+		d = "hard"
 	}
-	for bit != 0 {
-		if x64 >= root+bit {
-			x64 -= root + bit
-			root >>= 1
-			root += bit
-		} else {
-			root >>= 1
+	n := len(sq.m)
+	var buf bytes.Buffer
+	buf.WriteString("[")
+	for i := range sq.m {
+		if i != 0 {
+			buf.WriteString(",")
 		}
-		bit >>= 2
+		buf.WriteString("[")
+		for j := range sq.m[i] {
+			if j != 0 {
+				buf.WriteString(",")
+			}
+			if sq.mask[i][j] {
+				buf.WriteString("_")
+			} else {
+				buf.WriteString(strconv.Itoa(sq.m[i][j]))
+			}
+		}
+		buf.WriteString("]")
 	}
-	return int(root)
+	buf.WriteString("]")
+	return fmt.Sprintf("test_case(%v, %v, %v, %v).", n, sq.alg, d, buf.String())
 }
 
-// move takes an index, i, into a square of some dimension and returns a new
-// index that is offset from i along the x and y axes. The movement wraps
-// around edges.
-func move(i, dim, dx, dy int) int {
-	for dx < 0 {
-		dx += dim
+func (sq *square) ReflectX() {
+	n := len(sq.m)
+	for y := 0; y < n; y++ {
+		for x := 0; x < n/2; x++ {
+			sq.m[y][x], sq.m[y][n-x-1] = sq.m[y][n-x-1], sq.m[y][x]
+		}
 	}
-	for dim <= dx {
-		dx -= dim
-	}
-	for dy < 0 {
-		dy += dim
-	}
-	for dim <= dy {
-		dy -= dim
-	}
-	x := (i + dx) % dim
-	y := (i/dim + dy) % dim
-	return x + dim*y
 }
 
-// odd1 implements the Siamese method (up & right / down)
-func odd1(dim int) (sq square) {
-	sq = make(square, dim*dim)
-	i := dim / 2
-	for n := 1; n <= dim*dim; n++ {
-		sq[i] = n
-		j := move(i, dim, +1, -1)
-		if sq[j] != 0 {
-			j = move(i, dim, 0, +1)
+func (sq *square) ReflectY() {
+	n := len(sq.m)
+	for y := 0; y < n/2; y++ {
+		for x := 0; x < n; x++ {
+			sq.m[y][x], sq.m[n-y-1][x] = sq.m[n-y-1][x], sq.m[y][x]
 		}
-		i = j
+	}
+}
+
+func (sq *square) Transpose() {
+	n := len(sq.m)
+	for i := 0; i < n; i++ {
+		for j := i; j < n; j++ {
+			sq.m[i][j], sq.m[j][i] = sq.m[j][i], sq.m[i][j]
+		}
+	}
+}
+
+func (sq *square) Shuffle() {
+	if rand.Float64() < 0.5 {
+		sq.ReflectX()
+	}
+	if rand.Float64() < 0.5 {
+		sq.ReflectY()
+	}
+	if rand.Float64() < 0.5 {
+		sq.Transpose()
+	}
+}
+
+func (sq *square) Mask(d density) {
+	n := len(sq.m)
+	sq.mask = make([][]bool, n)
+	sq.d = d
+	arr := make([]bool, n*n)
+	for i := range sq.mask {
+		sq.mask[i] = arr[n*i : n*(i+1)]
+	}
+	count := float64(0)
+	for {
+		for i := range arr {
+			if float64(d) <= count/float64(n*n) {
+				return
+			}
+			if !arr[i] && rand.Float64() < 0.5 {
+				arr[i] = true
+				count++
+			}
+		}
+	}
+}
+
+// cursor
+// -------------------------
+
+type cursor struct {
+	*square
+	x, y int
+}
+
+func (c *cursor) Read() int {
+	return c.m[c.y][c.x]
+}
+
+func (c *cursor) Set(n int) {
+	c.m[c.y][c.x] = n
+}
+
+func (c *cursor) SetPos(x, y int) {
+	c.x, c.y = x, y
+}
+
+func (c *cursor) Move(dx, dy int) {
+	dim := len(c.m)
+	c.x += dx
+	c.y += dy
+	for c.x < 0 {
+		c.x += dim
+	}
+	for c.y < 0 {
+		c.y += dim
+	}
+	c.x %= dim
+	c.y %= dim
+}
+
+// generators
+// -------------------------
+
+func Siamese1(n int) (sq square) {
+	if n%2 == 0 {
+		panic("Siamese1 must be called with odd order")
+	}
+	sq.Init(n)
+	sq.alg = "siamese1"
+	c := cursor{square: &sq}
+	c.SetPos(0, n/2)
+	for i := 0; i < n*n; i++ {
+		c.Set(i + 1)
+		c.Move(-1, +1)
+		if c.Read() != 0 {
+			c.Move(+2, -1)
+		}
 	}
 	return sq
 }
 
-// odd2 implements a variation the Siamese method (up & right / up & up)
-func odd2(dim int) (sq square) {
-	sq = make(square, dim*dim)
-	i := dim / 2
-	for n := 1; n <= dim*dim; n++ {
-		sq[i] = n
-		j := move(i, dim, +1, -1)
-		if sq[j] != 0 {
-			j = move(i, dim, 0, -2)
+func Siamese2(n int) (sq square) {
+	if n%2 == 0 {
+		panic("Siamese2 must be called with odd order")
+	}
+	sq.Init(n)
+	sq.alg = "siamese2"
+	c := cursor{square: &sq}
+	c.SetPos(n/2-1, n/2)
+	for i := 0; i < n*n; i++ {
+		c.Set(i + 1)
+		c.Move(-1, +1)
+		if c.Read() != 0 {
+			c.Move(-1, -1)
 		}
-		i = j
+	}
+	return sq
+}
+
+func Fours(n int) (sq square) {
+	if n%4 != 0 {
+		panic("Fours must called with doubly even order")
+	}
+	sq.Init(n)
+	sq.alg = "mystic"
+	c := cursor{square: &sq}
+	v := 1
+	for y := 0; y < n; y++ {
+		for x := 0; x < n; x++ {
+			c.SetPos(y, x)
+			if ((y%4 == 0 || y%4 == 3) && (x%4 == 0 || x%4 == 3)) ||
+				((y%4 == 1 || y%4 == 2) && (x%4 == 1 || x%4 == 2)) {
+				c.Set(n*n + 1 - v)
+			} else {
+				c.Set(v)
+			}
+			v++
+		}
 	}
 	return sq
 }
 
 func main() {
-	fmt.Println(odd1(5))
-	fmt.Println(odd2(5))
+	var sq square
+
+	sq = Siamese1(3)
+	sq.Shuffle()
+	fmt.Println(sq.String())
+	sq.Mask(HIGH)
+	fmt.Println(sq.String())
+	sq.Mask(MID)
+	fmt.Println(sq.String())
+	sq.Mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Siamese1(5)
+	sq.Shuffle()
+	fmt.Println(sq.String())
+	sq.Mask(HIGH)
+	fmt.Println(sq.String())
+	sq.Mask(MID)
+	fmt.Println(sq.String())
+	sq.Mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Siamese1(7)
+	sq.Shuffle()
+	fmt.Println(sq.String())
+	sq.Mask(HIGH)
+	fmt.Println(sq.String())
+	sq.Mask(MID)
+	fmt.Println(sq.String())
+	sq.Mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Siamese2(3)
+	sq.Shuffle()
+	fmt.Println(sq.String())
+	sq.Mask(HIGH)
+	fmt.Println(sq.String())
+	sq.Mask(MID)
+	fmt.Println(sq.String())
+	sq.Mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Siamese2(5)
+	sq.Shuffle()
+	fmt.Println(sq.String())
+	sq.Mask(HIGH)
+	fmt.Println(sq.String())
+	sq.Mask(MID)
+	fmt.Println(sq.String())
+	sq.Mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Siamese2(7)
+	sq.Shuffle()
+	fmt.Println(sq.String())
+	sq.Mask(HIGH)
+	fmt.Println(sq.String())
+	sq.Mask(MID)
+	fmt.Println(sq.String())
+	sq.Mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Fours(4)
+	sq.Shuffle()
+	fmt.Println(sq.String())
+	sq.Mask(HIGH)
+	fmt.Println(sq.String())
+	sq.Mask(MID)
+	fmt.Println(sq.String())
+	sq.Mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Fours(8)
+	sq.Shuffle()
+	fmt.Println(sq.String())
+	sq.Mask(HIGH)
+	fmt.Println(sq.String())
+	sq.Mask(MID)
+	fmt.Println(sq.String())
+	sq.Mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
 }
