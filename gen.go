@@ -70,7 +70,7 @@ func (sq *square) String() string {
 		buf.WriteString("]")
 	}
 	buf.WriteString("]")
-	return fmt.Sprintf("trial(%v, %v, %v, %v).", n, sq.alg, d, buf.String())
+	return fmt.Sprintf("trial(%v,%v,%v,%v).", n, sq.alg, d, buf.String())
 }
 
 func (sq *square) reflectX() {
