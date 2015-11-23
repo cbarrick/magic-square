@@ -11,10 +11,10 @@ import (
 // -------------------------
 
 type square struct {
-	m    [][]int // the square
-	mask [][]bool
-	d    density
-	alg  string // the algorithm used to generate the square
+	m   [][]int // the square
+	msk [][]bool
+	d   density
+	alg string // the algorithm used to generate the square
 }
 
 type density float64
@@ -26,14 +26,14 @@ const (
 	LOW  density = 0.75
 )
 
-func (sq *square) Init(n int) {
+func (sq *square) init(n int) {
 	sq.m = make([][]int, n)
-	sq.mask = make([][]bool, n)
+	sq.msk = make([][]bool, n)
 	m := make([]int, n*n)
-	mask := make([]bool, n*n)
+	msk := make([]bool, n*n)
 	for i := range sq.m {
 		sq.m[i] = m[n*i : n*(i+1)]
-		sq.mask[i] = mask[n*i : n*(i+1)]
+		sq.msk[i] = msk[n*i : n*(i+1)]
 	}
 }
 
@@ -61,7 +61,7 @@ func (sq *square) String() string {
 			if j != 0 {
 				buf.WriteString(",")
 			}
-			if sq.mask[i][j] {
+			if sq.msk[i][j] {
 				buf.WriteString("_")
 			} else {
 				buf.WriteString(strconv.Itoa(sq.m[i][j]))
@@ -73,7 +73,7 @@ func (sq *square) String() string {
 	return fmt.Sprintf("trial(%v, %v, %v, %v).", n, sq.alg, d, buf.String())
 }
 
-func (sq *square) ReflectX() {
+func (sq *square) reflectX() {
 	n := len(sq.m)
 	for y := 0; y < n; y++ {
 		for x := 0; x < n/2; x++ {
@@ -82,7 +82,7 @@ func (sq *square) ReflectX() {
 	}
 }
 
-func (sq *square) ReflectY() {
+func (sq *square) reflectY() {
 	n := len(sq.m)
 	for y := 0; y < n/2; y++ {
 		for x := 0; x < n; x++ {
@@ -91,7 +91,7 @@ func (sq *square) ReflectY() {
 	}
 }
 
-func (sq *square) Transpose() {
+func (sq *square) transpose() {
 	n := len(sq.m)
 	for i := 0; i < n; i++ {
 		for j := i; j < n; j++ {
@@ -100,25 +100,25 @@ func (sq *square) Transpose() {
 	}
 }
 
-func (sq *square) Shuffle() {
+func (sq *square) shuffle() {
 	if rand.Float64() < 0.5 {
-		sq.ReflectX()
+		sq.reflectX()
 	}
 	if rand.Float64() < 0.5 {
-		sq.ReflectY()
+		sq.reflectY()
 	}
 	if rand.Float64() < 0.5 {
-		sq.Transpose()
+		sq.transpose()
 	}
 }
 
-func (sq *square) Mask(d density) {
+func (sq *square) mask(d density) {
 	n := len(sq.m)
-	sq.mask = make([][]bool, n)
+	sq.msk = make([][]bool, n)
 	sq.d = d
 	arr := make([]bool, n*n)
-	for i := range sq.mask {
-		sq.mask[i] = arr[n*i : n*(i+1)]
+	for i := range sq.msk {
+		sq.msk[i] = arr[n*i : n*(i+1)]
 	}
 	count := float64(0)
 	for {
@@ -142,19 +142,19 @@ type cursor struct {
 	x, y int
 }
 
-func (c *cursor) Read() int {
+func (c *cursor) read() int {
 	return c.m[c.y][c.x]
 }
 
-func (c *cursor) Set(n int) {
+func (c *cursor) write(n int) {
 	c.m[c.y][c.x] = n
 }
 
-func (c *cursor) SetPos(x, y int) {
+func (c *cursor) set(y, x int) {
 	c.x, c.y = x, y
 }
 
-func (c *cursor) Move(dx, dy int) {
+func (c *cursor) move(dy, dx int) {
 	dim := len(c.m)
 	c.x += dx
 	c.y += dy
@@ -175,15 +175,16 @@ func Siamese1(n int) (sq square) {
 	if n%2 == 0 {
 		panic("Siamese1 must be called with odd order")
 	}
-	sq.Init(n)
+	sq.init(n)
 	sq.alg = "siamese1"
 	c := cursor{square: &sq}
-	c.SetPos(0, n/2)
+	c.set(0, n/2)
 	for i := 0; i < n*n; i++ {
-		c.Set(i + 1)
-		c.Move(-1, +1)
-		if c.Read() != 0 {
-			c.Move(+2, -1)
+		c.write(i + 1)
+		if i%n == n-1 {
+			c.move(+1, 0)
+		} else {
+			c.move(-1, +1)
 		}
 	}
 	return sq
@@ -193,15 +194,16 @@ func Siamese2(n int) (sq square) {
 	if n%2 == 0 {
 		panic("Siamese2 must be called with odd order")
 	}
-	sq.Init(n)
+	sq.init(n)
 	sq.alg = "siamese2"
 	c := cursor{square: &sq}
-	c.SetPos(n/2-1, n/2)
+	c.set(n/2-1, n/2)
 	for i := 0; i < n*n; i++ {
-		c.Set(i + 1)
-		c.Move(-1, +1)
-		if c.Read() != 0 {
-			c.Move(-1, -1)
+		c.write(i + 1)
+		if i%n == n-1 {
+			c.move(-2, 0)
+		} else {
+			c.move(-1, +1)
 		}
 	}
 	return sq
@@ -211,20 +213,87 @@ func Fours(n int) (sq square) {
 	if n%4 != 0 {
 		panic("Fours must called with doubly even order")
 	}
-	sq.Init(n)
+	sq.init(n)
 	sq.alg = "fours"
 	c := cursor{square: &sq}
 	v := 1
 	for y := 0; y < n; y++ {
 		for x := 0; x < n; x++ {
-			c.SetPos(y, x)
+			c.set(y, x)
 			if ((y%4 == 0 || y%4 == 3) && (x%4 == 0 || x%4 == 3)) ||
 				((y%4 == 1 || y%4 == 2) && (x%4 == 1 || x%4 == 2)) {
-				c.Set(n*n + 1 - v)
+				c.write(n*n + 1 - v)
 			} else {
-				c.Set(v)
+				c.write(v)
 			}
 			v++
+		}
+	}
+	return sq
+}
+
+func Lux(n int) (sq square) {
+	if (n-2)%4 != 0 || n < 6 {
+		panic("Lux must be called with singly even order, n >= 6")
+	}
+	sq.init(n)
+	sq.alg = "lux"
+	m := (n - 2) / 4
+	c := cursor{square: &sq}
+
+	l := func(i int) {
+		c.write(i + 1)
+		c.move(+1, -1)
+		c.write(i + 2)
+		c.move(0, +1)
+		c.write(i + 3)
+		c.move(-1, -1)
+		c.write(i + 4)
+		c.move(0, +1)
+	}
+	u := func(i int) {
+		c.move(0, -1)
+		c.write(i + 1)
+		c.move(+1, 0)
+		c.write(i + 2)
+		c.move(0, +1)
+		c.write(i + 3)
+		c.move(-1, 0)
+		c.write(i + 4)
+	}
+	x := func(i int) {
+		c.move(0, -1)
+		c.write(i + 1)
+		c.move(+1, +1)
+		c.write(i + 2)
+		c.move(0, -1)
+		c.write(i + 3)
+		c.move(-1, +1)
+		c.write(i + 4)
+	}
+
+	c.set(0, n/2)
+	for i := 0; i < n*n; i += 4 {
+		switch {
+		case c.y < n/2:
+			if c.y == n/2-1 && c.x == n/2 {
+				u(i)
+			} else {
+				l(i)
+			}
+		case c.y < 2*(m+2):
+			if c.x == n/2 {
+				l(i)
+			} else {
+				u(i)
+			}
+		default:
+			x(i)
+		}
+		if (i/4)%(n/2) == (n/2)-1 {
+			c.move(+2, 0)
+		} else {
+			c.move(-2, +2)
 		}
 	}
 	return sq
@@ -249,90 +318,112 @@ func main() {
 	fmt.Println()
 
 	sq = Siamese1(3)
-	sq.Shuffle()
+	sq.shuffle()
 	fmt.Println(sq.String())
-	sq.Mask(HIGH)
+	sq.mask(HIGH)
 	fmt.Println(sq.String())
-	sq.Mask(MID)
+	sq.mask(MID)
 	fmt.Println(sq.String())
-	sq.Mask(LOW)
+	sq.mask(LOW)
 	fmt.Println(sq.String())
 	fmt.Println()
 
 	sq = Siamese1(5)
-	sq.Shuffle()
+	sq.shuffle()
 	fmt.Println(sq.String())
-	sq.Mask(HIGH)
+	sq.mask(HIGH)
 	fmt.Println(sq.String())
-	sq.Mask(MID)
+	sq.mask(MID)
 	fmt.Println(sq.String())
-	sq.Mask(LOW)
+	sq.mask(LOW)
 	fmt.Println(sq.String())
 	fmt.Println()
 
 	sq = Siamese1(7)
-	sq.Shuffle()
+	sq.shuffle()
 	fmt.Println(sq.String())
-	sq.Mask(HIGH)
+	sq.mask(HIGH)
 	fmt.Println(sq.String())
-	sq.Mask(MID)
+	sq.mask(MID)
 	fmt.Println(sq.String())
-	sq.Mask(LOW)
+	sq.mask(LOW)
 	fmt.Println(sq.String())
 	fmt.Println()
 
 	sq = Siamese2(3)
-	sq.Shuffle()
+	sq.shuffle()
 	fmt.Println(sq.String())
-	sq.Mask(HIGH)
+	sq.mask(HIGH)
 	fmt.Println(sq.String())
-	sq.Mask(MID)
+	sq.mask(MID)
 	fmt.Println(sq.String())
-	sq.Mask(LOW)
+	sq.mask(LOW)
 	fmt.Println(sq.String())
 	fmt.Println()
 
 	sq = Siamese2(5)
-	sq.Shuffle()
+	sq.shuffle()
 	fmt.Println(sq.String())
-	sq.Mask(HIGH)
+	sq.mask(HIGH)
 	fmt.Println(sq.String())
-	sq.Mask(MID)
+	sq.mask(MID)
 	fmt.Println(sq.String())
-	sq.Mask(LOW)
+	sq.mask(LOW)
 	fmt.Println(sq.String())
 	fmt.Println()
 
 	sq = Siamese2(7)
-	sq.Shuffle()
+	sq.shuffle()
 	fmt.Println(sq.String())
-	sq.Mask(HIGH)
+	sq.mask(HIGH)
 	fmt.Println(sq.String())
-	sq.Mask(MID)
+	sq.mask(MID)
 	fmt.Println(sq.String())
-	sq.Mask(LOW)
+	sq.mask(LOW)
 	fmt.Println(sq.String())
 	fmt.Println()
 
 	sq = Fours(4)
-	sq.Shuffle()
+	sq.shuffle()
 	fmt.Println(sq.String())
-	sq.Mask(HIGH)
+	sq.mask(HIGH)
 	fmt.Println(sq.String())
-	sq.Mask(MID)
+	sq.mask(MID)
 	fmt.Println(sq.String())
-	sq.Mask(LOW)
+	sq.mask(LOW)
 	fmt.Println(sq.String())
 	fmt.Println()
 
 	sq = Fours(8)
-	sq.Shuffle()
+	sq.shuffle()
 	fmt.Println(sq.String())
-	sq.Mask(HIGH)
+	sq.mask(HIGH)
 	fmt.Println(sq.String())
-	sq.Mask(MID)
+	sq.mask(MID)
 	fmt.Println(sq.String())
-	sq.Mask(LOW)
+	sq.mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Lux(6)
+	sq.shuffle()
+	fmt.Println(sq.String())
+	sq.mask(HIGH)
+	fmt.Println(sq.String())
+	sq.mask(MID)
+	fmt.Println(sq.String())
+	sq.mask(LOW)
+	fmt.Println(sq.String())
+	fmt.Println()
+
+	sq = Lux(10)
+	sq.shuffle()
+	fmt.Println(sq.String())
+	sq.mask(HIGH)
+	fmt.Println(sq.String())
+	sq.mask(MID)
+	fmt.Println(sq.String())
+	sq.mask(LOW)
 	fmt.Println(sq.String())
 	fmt.Println()
 }
