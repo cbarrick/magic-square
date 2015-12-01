@@ -11,22 +11,22 @@ import (
 	"github.com/cbarrick/magic-square/ga"
 )
 
-const (
-	// the number of times to run a trial
-	count = 10
+// command line arguments
+var (
+	gen   = flag.String("g", "siamese1", "gives the generator of the trial")
+	order = flag.Int("o", 3, "gives the order of the trial")
+	dif   = flag.String("d", "easy", "gives the dificulty of the trial, one of 'easy', 'med', or 'hard'")
+	count = flag.Int("n", 10, "the number of times to run the trial")
 )
 
 func main() {
-	gen := flag.String("g", "siamese1", "gives the generator of the trial")
-	order := flag.Int("o", 3, "gives the order of the trial")
-	dif := flag.String("d", "easy", "gives the dificulty of the trial, one of 'easy', 'med', or 'hard'")
 	flag.Parse()
 	schema := getSchema(*gen, *order, *dif)
 	start := time.Now()
-	for i := 0; i < 10; i++ {
+	for i := 0; i < *count; i++ {
 		ga.Solve(schema)
 	}
-	avg := float64(time.Since(start).Nanoseconds()) / 1000000000 / 10
+	avg := float64(time.Since(start).Nanoseconds()) / 1000000000 / float64(*count)
 	fmt.Println(avg)
 }
 
