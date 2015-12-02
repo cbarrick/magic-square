@@ -151,6 +151,8 @@ func (m *Magic) Evolve(suitors ...evo.Genome) evo.Genome {
 			if i != size && j != size {
 				child.gene[p[i]], child.gene[p[j]] = child.gene[p[j]], child.gene[p[i]]
 			}
+		} else if chance < 0.4 {
+			smartMutation(child.gene, child.inst.schema)
 		} else {
 			break
 		}
@@ -162,6 +164,78 @@ func (m *Magic) Evolve(suitors ...evo.Genome) evo.Genome {
 		return m
 	}
 	return child
+}
+
+func smartMutation(gene, schema []int) bool {
+	const (
+		VERT = 0
+		HORTZ = 1
+	)
+
+	var (
+		chosenIdx int
+		findIdx int
+		targetValue int
+		diff int
+		dir = rand.Intn(2)
+		dim = sqrt(len(gene))
+		cTL = 0
+		cTR = dim - 1
+		cBL = (dim*dim - dim)
+		cBR = (dim*dim - 1)
+	)
+
+	switch rand.Intn(4) {
+	case 0:
+		chosenIdx = cTL
+	case 1:
+		chosenIdx = cTR
+	case 2:
+		chosenIdx = cBL
+	case 3:
+		chosenIdx = cBR
+	}
+
+	if dir == HORTZ {
+		if chosenIdx == cTL || chosenIdx == cTR {
+			diff = gene[cBL] - gene[cBR]
+			if chosenIdx == cTL {
+				targetValue = gene[cTR] + diff
+			} else {
+				targetValue = gene[cTL] - diff
+			}
+		} else {
+			diff = gene[cTL] - gene[cTR]
+			if chosenIdx == cBL {
+				targetValue = gene[cBR] + diff
+			} else {
+				targetValue = gene[cBL] - diff
+			}
+		}
+	} else {
+		if chosenIdx == cTL || chosenIdx == cBL {
+			diff = gene[cTR] - gene[cBR]
+			if chosenIdx == cTL {
+				targetValue = gene[cBL] + diff
+			} else {
+				targetValue = gene[cTL] - diff
+			}
+		} else {
+			diff = gene[cTL] - gene[cBL]
+			if chosenIdx == cTR {
+				targetValue = gene[cBR] + diff
+			} else {
+				targetValue = gene[cTR] - diff
+			}
+		}
+	}
+
+	findIdx = perm.Search(gene, targetValue)
+	if schema[findIdx] < 0 && schema[chosenIdx] < 0 {
+		gene[chosenIdx], gene[findIdx] = gene[findIdx], gene[chosenIdx]
+		return true
+	}
+	return false
 }
 
 // sqrt returns the integer part of the square root of n
