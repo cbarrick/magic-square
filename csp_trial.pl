@@ -6,20 +6,19 @@
 :- consult('./trials.pl').
 
 main :-
-	OptsSpec = [
+	% parse command line arguments
+	opt_arguments([
 		[opt(gen), shortflags([g]), type(atom)],
 		[opt(order), shortflags([o]), type(integer)],
 		[opt(dif), shortflags([d]), type(atom)],
 		[opt(count), shortflags([n]), type(integer)]
-	],
-	opt_arguments(OptsSpec, Opts, _),
-	member(gen(Gen), Opts),
-	member(order(Order), Opts),
-	member(dif(Dif), Opts),
+	], Opts, _),
+	(member(gen(Gen), Opts);     Gen = siamese1),
+	(member(order(Order), Opts); Order = 3),
+	(member(dif(Dif), Opts);     Dif = easy),
 	(member(count(Count), Opts); Count=10),
-	nonvar(Gen),
-	nonvar(Order),
-	nonvar(Dif),
+
+	% run the experiment
 	statistics(walltime, _),
 	forall(between(0, Count, _), (
 		trial(Order, Gen, Dif, Schema),
