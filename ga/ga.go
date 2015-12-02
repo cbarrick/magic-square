@@ -168,21 +168,21 @@ func (m *Magic) Evolve(suitors ...evo.Genome) evo.Genome {
 
 func smartMutation(gene, schema []int) bool {
 	const (
-		VERT = 0
+		VERT  = 0
 		HORTZ = 1
 	)
 
 	var (
-		chosenIdx int
-		findIdx int
+		chosenIdx   int
+		findIdx     int
 		targetValue int
-		diff int
-		dir = rand.Intn(2)
-		dim = sqrt(len(gene))
-		cTL = 0
-		cTR = dim - 1
-		cBL = (dim*dim - dim)
-		cBR = (dim*dim - 1)
+		diff        int
+		dir         = rand.Intn(2)
+		dim         = sqrt(len(gene))
+		cTL         = 0
+		cTR         = dim - 1
+		cBL         = (dim*dim - dim)
+		cBR         = (dim*dim - 1)
 	)
 
 	switch rand.Intn(4) {
@@ -228,6 +228,12 @@ func smartMutation(gene, schema []int) bool {
 				targetValue = gene[cTR] - diff
 			}
 		}
+	}
+
+	if targetValue < 0 {
+		targetValue += dim * dim
+	} else if targetValue >= dim*dim {
+		targetValue -= dim * dim
 	}
 
 	findIdx = perm.Search(gene, targetValue)
