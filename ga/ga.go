@@ -1,6 +1,8 @@
 package ga
 
 import (
+	"fmt"
+	"math"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -36,7 +38,7 @@ type Magic struct {
 // String returns a representation of the square. The output is a valid Prolog
 // term, and the numeric values are incremented by 1 to match the theory on
 // Wikipedia. Thus the output can be verified directly by the Prolog solver.
-func (m Magic) String() (s string) {
+func (m *Magic) String() (s string) {
 	order := m.inst.order
 	n := 0
 	s += "["
@@ -54,6 +56,7 @@ func (m Magic) String() (s string) {
 		}
 	}
 	s += "]"
+	s += fmt.Sprintf("@%v", m.Fitness())
 	return s
 }
 
@@ -64,46 +67,64 @@ func (m *Magic) Close() {}
 // conflicts. The fitness is only computed once across all calls to the method
 // by using a sync.Once.
 func (m *Magic) Fitness() (fitness float64) {
-	order := m.inst.order
-	sum := order * (order*order - 1) / 2
-	var part int // partial sum, used to compute sums of rows, cols, diags.
+	const (
+		penalty = 0.25
+	)
+
+	var (
+		order = m.inst.order
+
+		// the target that each row, col, diag should sum to
+		target = order * (order*order - 1) / 2
+
+		// the actual value of the row, col, diag
+		actual = 0
+	)
 
 	// rows
 	for i := 0; i < order; i++ {
-		part = 0
+		actual = 0
 		for j := 0; j < order; j++ {
-			part += m.gene[order*i+j]
+			actual += m.gene[order*i+j]
 		}
-		if part == sum {
-			fitness++
+		if actual == target {
+			fitness += float64(target)
+		} else {
+			fitness -= penalty * math.Abs(float64((actual-target)))
 		}
 	}
 
 	// columns
 	for i := 0; i < order; i++ {
-		part = 0
+		actual = 0
 		for j := 0; j < order; j++ {
-			part += m.gene[order*j+i]
+			actual += m.gene[order*j+i]
 		}
-		if part == sum {
-			fitness++
+		if actual == target {
+			fitness += float64(target)
+		} else {
+			fitness -= penalty * math.Abs(float64((actual-target)))
 		}
 	}
 
 	// diagonals
-	part = 0
+	actual = 0
 	for i := 0; i < order; i++ {
-		part += m.gene[order*i+i]
+		actual += m.gene[order*i+i]
 	}
-	if part == sum {
-		fitness++
+	if actual == target {
+		fitness += float64(target)
+	} else {
+		fitness -= penalty * math.Abs(float64((actual-target)))
 	}
-	part = 0
+	actual = 0
 	for i := 0; i < order; i++ {
-		part += m.gene[order*(i+1)-i-1]
+		actual += m.gene[order*(i+1)-i-1]
 	}
-	if part == sum {
-		fitness++
+	if actual == target {
+		fitness += float64(target)
+	} else {
+		fitness -= penalty * math.Abs(float64((actual-target)))
 	}
 
 	// increment the counter of fitness evals
@@ -305,6 +326,9 @@ func Solve(schema []int) (soln *Magic, rsc int) {
 		// the order of the problem
 		order = sqrt(size)
 
+		// magic constant for this order
+		target = order * (order*order - 1) / 2
+
 		// the size of the population
 		popz = 10 * order
 
@@ -315,7 +339,7 @@ func Solve(schema []int) (soln *Magic, rsc int) {
 		}
 
 		// variables used to reseed the population
-		reseedT = 4 * time.Second
+		reseedT = 4 * time.Millisecond
 		reseedC = time.After(reseedT)
 		reseed  = func() {
 			rsc++
@@ -326,6 +350,8 @@ func Solve(schema []int) (soln *Magic, rsc int) {
 			pop.Start()
 			reseedC = time.After(reseedT)
 		}
+
+		timeout = time.After(30 * time.Second)
 	)
 
 	// start the GA in the background
@@ -334,6 +360,13 @@ func Solve(schema []int) (soln *Magic, rsc int) {
 
 	for {
 		select {
+		case <-timeout:
+			pop.Close()
+			for i := pop.Iter(); i.Value() != nil; i.Next() {
+				fmt.Println(i.Value())
+			}
+			fmt.Println(pop.Stats().RSD())
+			return soln, rsc
 
 		// reseed the population periodically with exponential backoff
 		case <-reseedC:
@@ -344,14 +377,22 @@ func Solve(schema []int) (soln *Magic, rsc int) {
 		// or reseed if we converge prematurely
 		default:
 			s := pop.Stats()
-			if s.Max() == float64(order*2+2) {
+			if s.Max() == float64(target*(order*2+2)) {
 				pop.Close()
 				soln = evo.Max(pop).(*Magic)
 				return soln, rsc
 			}
-			if s.RSD() < 0.00001 {
+			if s.RSD() < 0.3 {
 				reseed()
 			}
 		}
 	}
+}
+
+func Generate(ord int) (soln *Magic, rsc int) {
+	schema := make([]int, ord*ord)
+	for i := range schema {
+		schema[i] = -1
+	}
+	return Solve(schema)
 }

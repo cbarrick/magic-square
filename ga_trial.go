@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cbarrick/magic-square/ga"
@@ -13,21 +14,30 @@ import (
 
 // command line arguments
 var (
-	gen   = flag.String("g", "siamese1", "gives the generator of the trial")
+	spec  = flag.String("t", "siamese1,easy", "gives trial to run")
 	order = flag.Int("o", 3, "gives the order of the trial")
-	dif   = flag.String("d", "easy", "gives the dificulty of the trial, one of 'easy', 'med', or 'hard'")
 	count = flag.Int("n", 10, "the number of times to run the trial")
 )
 
 func main() {
 	flag.Parse()
-	schema := getSchema(*gen, *order, *dif)
-	start := time.Now()
-	for i := 0; i < *count; i++ {
-		ga.Solve(schema)
+	var avg float64
+	t := strings.Split(*spec, ",")
+	if t[0] == "generate" {
+		start := time.Now()
+		for i := 0; i < *count; i++ {
+			ga.Generate(*order)
+		}
+		avg = float64(time.Since(start).Nanoseconds()) / 1000000000 / float64(*count)
+	} else {
+		schema := getSchema(t[0], *order, t[1])
+		start := time.Now()
+		for i := 0; i < *count; i++ {
+			ga.Solve(schema)
+		}
+		avg = float64(time.Since(start).Nanoseconds()) / 1000000000 / float64(*count)
 	}
-	avg := float64(time.Since(start).Nanoseconds()) / 1000000000 / float64(*count)
-	fmt.Println(avg)
+	fmt.Printf("%v",  avg)
 }
 
 // parser
