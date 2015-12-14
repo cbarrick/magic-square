@@ -1,5 +1,3 @@
-timeout,30
-count,10
 Generator,Order,Difficulty,GA_time,CSP_time
 siamese1,3,easy,0.0003148975,0.0015853
 siamese1,3,med,0.0005892441,0.0016303
