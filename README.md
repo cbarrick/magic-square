@@ -8,8 +8,12 @@ The goal of this project is to develop a genetic algorithm for solving [normal m
 ## Source Layout
 
 - `ga/` and `csp/`: These directories contain the source code for the genetic algorithm and constraint satisfaction solvers respectively.
-- `gen.go`: This program is used to the generate problem instances used in the experiment. It uses a variety of algorithms to generate partial magic squares of different orders. The output is a valid Prolog knowledge base and is saved as `trials.pl`.
-- `ga_trial.go` and `csp_trial.pl`: These programs provide entry points to run each solver against specific trials. They require the same command-line flags, given below:
-	- `-g GENERATOR`: This flag specifies the generator of the trial. The generator is the algorithm used to generate the problem instance.
-	- `-o ORDER`: This flag specifies the order of the trial. Only certain combinations of order and generator are valid for specific trials. See the `trials.pl` file for valid combinations.
-	- `-d DIFFICULTY`: This flag specifies the difficulty of the problem instance and must be one of `hard`, `med`, or `easy`.
+- `ga_trial.go` and `csp_trial.pl`: These programs provide entry points to run each solver against specific trials. They accept the same command-line flags, given below, and their output is a timing of the trial.
+	- `-g <generator>`: The generator identifies the algorithm that generated the trial to be run.
+	- `-o <order>`: The order identifies the size of the trial to be run. Only certain combinations of order and generator are valid. See the `trials.pl` file for valid combinations.
+	- `-d <difficulty>`: The difficulty of the problem must be one of `hard`, `med`, or `easy`.
+	- `-n <count>`: The trial is run repeatedly for some count of iterations and the average time taken is reported.
+	- `-t <timeout>`: If any particular iteration takes longer than the timeout, the program halts and "timeout" is printed.
+- `trials.pl`: This file contains the trials to run in the experiment.
+- `main.sh`: This script runs each of the solvers on each of the trials and prints a comma-separated table of the average time taken for each trial.
+- `data.csv`: This is the experimental data collected from `main.sh` and referenced in the report.

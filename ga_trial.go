@@ -5,51 +5,76 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/cbarrick/magic-square/ga"
 )
 
-// command line arguments
+var synopsis = `synopsis:
+	This program runs the genetic algorithm experiment. A file named
+	'trials.pl' containing the possible trials to run must exist in the current
+	working directory.
+`
+
+// value of command line arguments
 var (
-	spec  = flag.String("t", "siamese1,easy", "gives trial to run")
-	order = flag.Int("o", 3, "gives the order of the trial")
-	count = flag.Int("n", 10, "the number of times to run the trial")
+	gen     = flag.String("g", "siamese1", "the generator type of the trial.")
+	order   = flag.Int("o", 3, "the order of the trial.")
+	dif     = flag.String("d", "easy", "the dificulty of the trial.")
+	count   = flag.Int("n", 1, "the number of times to run the trial.")
+	timeout = flag.Int("t", 30, "timeout in seconds")
+	help    = flag.Bool("h", false, "show this help message.")
 )
 
-func main() {
-	flag.Parse()
-	var avg float64
-	t := strings.Split(*spec, ",")
-	if t[0] == "generate" {
-		start := time.Now()
-		for i := 0; i < *count; i++ {
-			ga.Generate(*order)
-		}
-		avg = float64(time.Since(start).Nanoseconds()) / 1000000000 / float64(*count)
-	} else {
-		schema := getSchema(t[0], *order, t[1])
-		start := time.Now()
-		for i := 0; i < *count; i++ {
-			ga.Solve(schema)
-		}
-		avg = float64(time.Since(start).Nanoseconds()) / 1000000000 / float64(*count)
-	}
-	fmt.Printf("%v",  avg)
+// printHelp prints a usage message
+func printHelp() {
+	name := filepath.Base(os.Args[0])
+	fmt.Fprintln(os.Stderr, "usage:\n\t", name, "<args>\n")
+	fmt.Fprintln(os.Stderr, synopsis)
+	fmt.Fprintln(os.Stderr, "arguments:")
+	flag.PrintDefaults()
 }
 
-// parser
-// -------------------------
-// Everything below this point is helper code to read trials.
-// Use getSchema to retreive a specific trial from the input.
+// main fetches a schema from trials.pl and tries to solve it with the GA.
+func main() {
+	// read the command line arguments and get the schema
+	flag.Parse()
+	if *help {
+		printHelp()
+		return
+	}
+	schema := getSchema()
+
+	// run the ga and print the average time of the trials
+	var avg float64
+	ret := make(chan ga.Square, 1)
+	stop := time.After(time.Duration(*timeout) * time.Second)
+	start := time.Now()
+	for i := 0; i < *count; i++ {
+		go ga.Solve(schema, ret)
+		select {
+		case <-ret:
+		case <-stop:
+			fmt.Print("timeout")
+			return
+		}
+	}
+	avg = float64(time.Since(start).Nanoseconds()) / 1e9 / float64(*count)
+	fmt.Println(avg)
+}
+
+// Parser
+// --------------------------------------------------
+// Everything below this point is helper code to read trials from the file.
+// Use getSchema to retreive a specific trial.
 
 type trial struct {
-	order  int    // order of the square
-	gen    string // algorithm generating the square
-	dif    string // difficulty of the schema
-	schema []int  // decoded schema
+	order  int       // order of the square
+	gen    string    // algorithm generating the square
+	dif    string    // difficulty of the schema
+	schema ga.Square // decoded schema
 }
 
 type unexpectedErr struct{}
@@ -58,31 +83,19 @@ func (unexpectedErr) Error() string {
 	return "unexpected input"
 }
 
-var (
-	trials = make([]trial, 0, 40)
-	input  *bufio.Reader
-)
-
-func getSchema(gen string, order int, dif string) []int {
-	if input == nil {
-		f, err := os.Open("./trials.pl")
-		if err != nil {
-			panic(err.Error())
-		}
-		input = bufio.NewReader(f)
+func getSchema() ga.Square {
+	f, err := os.Open("./trials.pl")
+	defer f.Close()
+	if err != nil {
+		panic(err.Error())
 	}
-	for _, t := range trials {
-		if t.order == order && t.gen == gen && t.dif == dif {
-			return t.schema
-		}
-	}
+	input := bufio.NewReader(f)
 	for {
 		t, err := readTrial(input)
 		if err != nil {
 			panic(err.Error())
 		}
-		trials = append(trials, t)
-		if t.order == order && t.gen == gen && t.dif == dif {
+		if t.order == *order && t.gen == *gen && t.dif == *dif {
 			return t.schema
 		}
 	}
@@ -123,7 +136,7 @@ func readTrial(r *bufio.Reader) (t trial, err error) {
 		if err != nil {
 			return t, err
 		}
-		t.schema, err = readSquare(r, t.order*t.order)
+		t.schema, err = readSquare(r, t.order)
 		if err != nil {
 			return t, err
 		}
@@ -179,13 +192,14 @@ func readMetadata(r *bufio.Reader) (order int, gen, dif string, err error) {
 	return order, gen, dif, nil
 }
 
-func readSquare(r *bufio.Reader, n int) (schema []int, err error) {
+func readSquare(r *bufio.Reader, order int) (schema ga.Square, err error) {
 	err = expect(r, "[")
 	if err != nil {
 		return schema, err
 	}
 	depth := 1
-	schema = make([]int, 0, n)
+	schema = ga.NewSquare(order)
+	i, j := 0, 0
 	for {
 		char, err := r.Peek(1)
 		if err != nil {
@@ -203,6 +217,8 @@ func readSquare(r *bufio.Reader, n int) (schema []int, err error) {
 			if err != nil {
 				return schema, err
 			}
+			i++
+			j = 0
 			depth--
 			if depth == 0 {
 				return schema, nil
@@ -217,7 +233,7 @@ func readSquare(r *bufio.Reader, n int) (schema []int, err error) {
 			if err != nil {
 				return schema, err
 			}
-			schema = append(schema, -1)
+			j++
 		default:
 			bytes := make([]byte, 0, 3)
 			for {
@@ -239,7 +255,8 @@ func readSquare(r *bufio.Reader, n int) (schema []int, err error) {
 			if err != nil {
 				return schema, err
 			}
-			schema = append(schema, n-1)
+			schema.Sq[i][j] = n
+			j++
 		}
 	}
 }
