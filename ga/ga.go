@@ -23,7 +23,7 @@ func (*Genome) Close() {}
 
 func (g *Genome) Fitness() float64 {
 	g.Express()
-	return float64(len(g.GoodSet()))
+	return -float64(g.FitDelta())
 }
 
 func (g *Genome) Evolve(suitors ...evo.Genome) evo.Genome {
@@ -38,10 +38,6 @@ func (g *Genome) Evolve(suitors ...evo.Genome) evo.Genome {
 	// Mutation:
 	for chance := rand.Float64(); chance < 0.2; chance = rand.Float64() {
 		child.Mutate()
-	}
-
-	if child.Fitness() == float64(child.order*child.order+2) {
-		fmt.Println(child)
 	}
 
 	// Replacement:
@@ -83,7 +79,7 @@ func Solve(schema Square, ret chan Square) {
 		stats := pop.Stats()
 		fmt.Println(stats.SD(), stats.RSD())
 		for i := pop.Iter(); i.Value() != nil; i.Next() {
-			fmt.Println(i.Value().(*Genome).Express())
+			fmt.Println(i.Value().(*Genome).Express(), i.Value().(*Genome).Fitness())
 		}
 		os.Exit(2)
 	}()
@@ -100,7 +96,7 @@ func Solve(schema Square, ret chan Square) {
 		stats := pop.Stats()
 
 		// halt when we find a solution
-		if best.Fitness() == float64(order*2+2) {
+		if best.Fitness() == 0 {
 			ret <- best.(*Genome).Square
 			pop.Close()
 			return
