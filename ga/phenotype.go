@@ -174,7 +174,7 @@ func (sq Square) FitDelta() (delta int) {
 		var rowSum, colSum int
 		for j := range sq.Sq[i] {
 			rowSum += sq.Sq[i][j]
-			colSum += transpose.Sq[j][i]
+			colSum += transpose.Sq[i][j]
 		}
 		if rowSum < mc {
 			delta += mc - rowSum
@@ -194,9 +194,9 @@ func (sq Square) FitDelta() (delta int) {
 	var posSum, negSum int
 	for i := range sq.Sq {
 		posDiag[i] = sq.Sq[i][i]
-		negDiag[i] = transpose.Sq[i][i]
+		negDiag[i] = sq.Sq[order-i-1][i]
 		posSum += sq.Sq[i][i]
-		negSum += transpose.Sq[i][i]
+		negSum += sq.Sq[order-i-1][i]
 	}
 	if posSum < mc {
 		delta += mc - posSum
