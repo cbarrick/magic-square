@@ -74,18 +74,18 @@ func (s *Siam) Express() Square {
 					}
 				}
 				if loop {
-					for h := 0; h < s.order; h++ {
-						c.Row = h
-						for k := 0; k < s.order; k++ {
-							c.Col = k
-							if c.Get() == 0 {
-								break
+					var nextpos [2]int
+					var empty [][2]int
+					for h := range s.Sq {
+						for k := range s.Sq[h] {
+							if s.Sq[h][k] == 0 {
+								empty = append(empty, [2]int{h, k})
 							}
 						}
-						if c.Get() == 0 {
-							break
-						}
 					}
+					nextpos = empty[rand.Intn(len(empty))]
+					c.Row = nextpos[0]
+					c.Col = nextpos[1]
 				}
 			}
 		}
