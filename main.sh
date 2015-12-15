@@ -1,7 +1,7 @@
 #!/bin/bash
 
 count=10
-timeout=30
+timeout=60
 
 echo "timeout,$timeout"
 echo "count,$count"
